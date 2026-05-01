@@ -86,6 +86,36 @@ p.subtitle {
   background: rgba(77, 255, 145, 0.08);
 }
 
+.install-banner {
+  background: rgba(77, 166, 255, 0.1);
+  border: 1px solid var(--accent-blue);
+  color: var(--text-primary);
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  gap: 12px;
+}
+
+#install-btn {
+  background: var(--accent-blue);
+  color: var(--bg-primary);
+  border: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+#install-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(77, 166, 255, 0.4);
+}
+
 /* ── Main ────────────────────────────────────────────────────────────────── */
 
 main {
@@ -247,6 +277,64 @@ main {
 
 .leaflet-control-zoom a:hover {
   background: var(--bg-card-hover) !important;
+}
+
+/* ── Download Map UI ─────────────────────────────────────────────────────── */
+
+#download-map-ui {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+#download-map-btn {
+  background: rgba(19, 19, 30, 0.9);
+  backdrop-filter: blur(4px);
+  color: var(--text-primary);
+  border: 1px solid var(--border-card);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  transition: var(--transition);
+}
+
+#download-map-btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+#download-progress-container {
+  background: rgba(19, 19, 30, 0.9);
+  border: 1px solid var(--border-card);
+  padding: 8px;
+  border-radius: 8px;
+  width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#download-progress-bar {
+  height: 6px;
+  background: var(--accent-green);
+  width: 0%;
+  border-radius: 3px;
+  transition: width 0.2s;
+}
+
+#download-status-text {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-align: right;
 }
 
 /* ── Results ─────────────────────────────────────────────────────────────── */

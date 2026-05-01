@@ -18,6 +18,10 @@
     <div class="logo-pulse"></div>
     <h1>🚨 Emergency Help</h1>
     <p class="subtitle">Find hospitals, police &amp; fire stations near you — works offline.</p>
+    <div id="install-banner" class="install-banner" style="display:none">
+      <span>Install app for true offline use</span>
+      <button id="install-btn">Install</button>
+    </div>
     <div id="data-status" class="data-status">Loading facility data…</div>
   </header>
 
@@ -32,6 +36,13 @@
     <div id="map-container">
       <div id="map"></div>
       <div id="map-offline-notice">Map tiles load online &amp; cache for offline use</div>
+      <div id="download-map-ui" style="display:none">
+        <button id="download-map-btn">📥 Save Map Offline (10km)</button>
+        <div id="download-progress-container" style="display:none">
+          <div id="download-progress-bar"></div>
+          <span id="download-status-text">Calculating...</span>
+        </div>
+      </div>
     </div>
 
     <div id="results">

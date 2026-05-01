@@ -77,6 +77,26 @@ function formatDistance(metres) {
   return `${(metres / 1000).toFixed(1)} km`;
 }
 
+/**
+ * Bearing from user to facility.
+ * @returns {string} e.g. "NW ↖️"
+ */
+function getBearing(lat1, lon1, lat2, lon2) {
+  const toRad = (d) => (d * Math.PI) / 180;
+  const toDeg = (r) => (r * 180) / Math.PI;
+
+  const dLon = toRad(lon2 - lon1);
+  const y = Math.sin(dLon) * Math.cos(toRad(lat2));
+  const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+            Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
+  let brng = toDeg(Math.atan2(y, x));
+  brng = (brng + 360) % 360;
+  
+  const directions = ["N ⬆️", "NE ↗️", "E ➡️", "SE ↘️", "S ⬇️", "SW ↙️", "W ⬅️", "NW ↖️"];
+  const index = Math.round(brng / 45) % 8;
+  return directions[index];
+}
+
 // ── Nearest facility finder ──────────────────────────────────────────────────
 
 /**
@@ -106,12 +126,14 @@ function findNearest(userLat, userLon, category, limit = 50) {
     // Quick bounding-box reject
     if (f.lat < latMin || f.lat > latMax || f.lon < lonMin || f.lon > lonMax) continue;
     const distMetres = haversineMetres(userLat, userLon, f.lat, f.lon);
+    const bearing = getBearing(userLat, userLon, f.lat, f.lon);
     candidates.push({
       name: f.name,
       lat: f.lat,
       lon: f.lon,
       distMetres,
       dist: formatDistance(distMetres),
+      bearing: bearing,
     });
   }
 
@@ -122,12 +144,14 @@ function findNearest(userLat, userLon, category, limit = 50) {
       const f = ALL_FACILITIES[i];
       if (f.category !== category || f.lat == null || f.lon == null) continue;
       const distMetres = haversineMetres(userLat, userLon, f.lat, f.lon);
+      const bearing = getBearing(userLat, userLon, f.lat, f.lon);
       candidates.push({
         name: f.name,
         lat: f.lat,
         lon: f.lon,
         distMetres,
         dist: formatDistance(distMetres),
+        bearing: bearing,
       });
     }
   }
@@ -298,6 +322,7 @@ function initMap(userLat, userLon, allResults) {
 
   // Force Leaflet to recalculate after container becomes visible
   setTimeout(() => map.invalidateSize(), 200);
+  document.getElementById("download-map-ui").style.display = "flex";
 }
 
 /**
@@ -344,7 +369,7 @@ function createCard(item, index, userLat, userLon) {
   card.innerHTML = `
     <div class="card-info">
       <div class="name">${item.name}</div>
-      <div class="dist">📍 ${item.dist ?? "Nearby"}</div>
+      <div class="dist">📍 ${item.dist ?? "Nearby"} ${item.bearing ? ` • 🧭 ${item.bearing}` : ""}</div>
     </div>
     <div class="card-actions">
       ${mapsUrl
@@ -489,5 +514,97 @@ document.getElementById("find-btn").addEventListener("click", async () => {
   } finally {
     btn.disabled = false;
     btn.classList.remove("loading");
+  }
+});
+
+// ── PWA Installation Prompt ──────────────────────────────────────────────────
+
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('install-banner').style.display = 'flex';
+});
+
+document.getElementById('install-btn').addEventListener('click', async () => {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      document.getElementById('install-banner').style.display = 'none';
+    }
+    deferredPrompt = null;
+  }
+});
+
+// ── Download Map Area (10km) ─────────────────────────────────────────────────
+
+// Math to convert lat/lon/zoom to OSM tile coordinates
+function lon2tile(lon, zoom) { return (Math.floor((lon + 180) / 360 * Math.pow(2, zoom))); }
+function lat2tile(lat, zoom) { return (Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom))); }
+
+document.getElementById("download-map-btn").addEventListener("click", async () => {
+  if (!navigator.geolocation) return;
+  const btn = document.getElementById("download-map-btn");
+  const progressContainer = document.getElementById("download-progress-container");
+  const progressBar = document.getElementById("download-progress-bar");
+  const statusText = document.getElementById("download-status-text");
+
+  btn.style.display = "none";
+  progressContainer.style.display = "flex";
+  statusText.textContent = "Getting location...";
+
+  try {
+    const { lat, lon } = await getUserLocation(3000);
+    
+    // 10km radius approximation in degrees
+    const latOffset = 10 / 111; 
+    const lonOffset = 10 / (111 * Math.cos(lat * Math.PI / 180));
+
+    const minLat = lat - latOffset, maxLat = lat + latOffset;
+    const minLon = lon - lonOffset, maxLon = lon + lonOffset;
+
+    const urlsToFetch = [];
+    // Zooms 13 to 16 for high detail
+    for (let z = 13; z <= 16; z++) {
+      const xMin = lon2tile(minLon, z), xMax = lon2tile(maxLon, z);
+      const yMin = Math.min(lat2tile(maxLat, z), lat2tile(minLat, z)); // Note: lat tile numbers decrease as lat increases
+      const yMax = Math.max(lat2tile(maxLat, z), lat2tile(minLat, z));
+
+      for (let x = xMin; x <= xMax; x++) {
+        for (let y = yMin; y <= yMax; y++) {
+          urlsToFetch.push(`https://tile.openstreetmap.org/${z}/${x}/${y}.png`);
+        }
+      }
+    }
+
+    statusText.textContent = `Downloading ${urlsToFetch.length} tiles...`;
+    
+    // We rely on the service worker to actually save these to the `sos-tiles-v1` cache during the fetch.
+    let downloaded = 0;
+
+    // Download in batches to avoid overwhelming the browser/network
+    const BATCH_SIZE = 10;
+    for (let i = 0; i < urlsToFetch.length; i += BATCH_SIZE) {
+      const batch = urlsToFetch.slice(i, i + BATCH_SIZE);
+      await Promise.all(batch.map(async (url) => {
+        try {
+          // fetch will be intercepted by SW and cached automatically
+          const res = await fetch(url, { cache: "no-store" }); 
+        } catch (e) {
+          // Ignore individual tile failures
+        }
+      }));
+      downloaded += batch.length;
+      progressBar.style.width = `${Math.min(100, (downloaded / urlsToFetch.length) * 100)}%`;
+      statusText.textContent = `${Math.min(downloaded, urlsToFetch.length)} / ${urlsToFetch.length}`;
+    }
+
+    statusText.textContent = "✅ Map saved offline!";
+    setTimeout(() => { progressContainer.style.display = "none"; btn.style.display = "block"; btn.textContent = "✅ Map Saved (10km)"; }, 3000);
+
+  } catch (err) {
+    statusText.textContent = "❌ Error downloading map";
+    setTimeout(() => { progressContainer.style.display = "none"; btn.style.display = "block"; }, 3000);
   }
 });
