@@ -1,4 +1,4 @@
-const CACHE_NAME = "sos-offline-v2";
+const CACHE_NAME = "sos-offline-v3";
 const TILE_CACHE  = "sos-tiles-v1";
 
 // Core app files — pre-cached on install
