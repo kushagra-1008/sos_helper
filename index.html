@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Emergency Help Finder — India</title>
+  <meta name="description" content="Offline SOS app — find the nearest hospitals, police stations, and fire stations across India using GPS. No internet required." />
+  <meta name="theme-color" content="#0a0a10" />
+  <link rel="manifest" href="manifest.json" />
+
+  <!-- Leaflet CSS (cached by SW for offline) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header>
+    <div class="logo-pulse"></div>
+    <h1>🚨 Emergency Help</h1>
+    <p class="subtitle">Find hospitals, police &amp; fire stations near you — works offline.</p>
+    <div id="data-status" class="data-status">Loading facility data…</div>
+  </header>
+
+  <main>
+    <button id="find-btn">
+      <span class="btn-icon">📍</span>
+      <span class="btn-text">Find Nearby Help</span>
+    </button>
+    <p id="status"></p>
+
+    <!-- Map -->
+    <div id="map-container">
+      <div id="map"></div>
+      <div id="map-offline-notice">Map tiles load online &amp; cache for offline use</div>
+    </div>
+
+    <div id="results">
+      <div class="section hospitals">
+        <h2>🏥 Hospitals &amp; Clinics</h2>
+        <div class="cards" id="hospitals-list"></div>
+        <button class="show-more-btn" id="hospitals-more" style="display:none">Show more +5</button>
+      </div>
+      <div class="section police">
+        <h2>👮 Police Stations</h2>
+        <div class="cards" id="police-list"></div>
+        <button class="show-more-btn" id="police-more" style="display:none">Show more +5</button>
+      </div>
+      <div class="section fire">
+        <h2>🚒 Fire Stations</h2>
+        <div class="cards" id="fire-list"></div>
+        <button class="show-more-btn" id="fire-more" style="display:none">Show more +5</button>
+      </div>
+      <div class="section emergency">
+        <h2>📞 Emergency Numbers</h2>
+        <div class="cards" id="emergency-list"></div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <p>Data sourced from OpenStreetMap • Works offline once loaded</p>
+  </footer>
+
+  <!-- Leaflet JS (cached by SW for offline) -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+
+</body>
+</html>

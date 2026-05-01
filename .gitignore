@@ -1,0 +1,9 @@
+# Raw OSM Data (Too large for GitHub)
+*.osm.pbf
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Local databases
+# india_sos.db
