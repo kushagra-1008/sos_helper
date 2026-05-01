@@ -322,7 +322,6 @@ function initMap(userLat, userLon, allResults) {
 
   // Force Leaflet to recalculate after container becomes visible
   setTimeout(() => map.invalidateSize(), 200);
-  document.getElementById("download-map-ui").style.display = "flex";
 }
 
 /**
