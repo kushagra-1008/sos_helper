@@ -169,7 +169,7 @@ function findNearest(userLat, userLon, category, limit = 50) {
  *
  * @returns {Promise<{ lat: number, lon: number, accuracy: number }>}
  */
-function getUserLocation(WATCH_MS = 6000, GOOD_ACCURACY_M = 50) {
+function getUserLocation(WATCH_MS = 15000, GOOD_ACCURACY_M = 100) {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       reject("Geolocation is not supported by your browser.");
@@ -216,7 +216,7 @@ function getUserLocation(WATCH_MS = 6000, GOOD_ACCURACY_M = 50) {
         if (!fixes.length) reject(messages[error.code] || "Unknown location error.");
         else finish();
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 }
     );
 
     setTimeout(finish, WATCH_MS);
