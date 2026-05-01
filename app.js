@@ -537,74 +537,249 @@ document.getElementById('install-btn').addEventListener('click', async () => {
   }
 });
 
-// ── Download Map Area (10km) ─────────────────────────────────────────────────
+// ── Offline Maps Manager ─────────────────────────────────────────────────────
 
-// Math to convert lat/lon/zoom to OSM tile coordinates
-function lon2tile(lon, zoom) { return (Math.floor((lon + 180) / 360 * Math.pow(2, zoom))); }
-function lat2tile(lat, zoom) { return (Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom))); }
+// Modal Toggles
+const managerModal = document.getElementById("manager-modal");
+document.getElementById("open-manager-btn").addEventListener("click", () => {
+  managerModal.style.display = "flex";
+  updateStorageSize();
+});
+document.getElementById("close-manager-btn").addEventListener("click", () => {
+  managerModal.style.display = "none";
+});
 
-document.getElementById("download-map-btn").addEventListener("click", async () => {
-  if (!navigator.geolocation) return;
-  const btn = document.getElementById("download-map-btn");
-  const progressContainer = document.getElementById("download-progress-container");
-  const progressBar = document.getElementById("download-progress-bar");
-  const statusText = document.getElementById("download-status-text");
+// Tab Toggles
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", (e) => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+    e.target.classList.add("active");
+    document.getElementById(e.target.dataset.tab).classList.add("active");
+    if (e.target.dataset.tab === "tab-storage") updateStorageSize();
+  });
+});
 
-  btn.style.display = "none";
-  progressContainer.style.display = "flex";
-  statusText.textContent = "Getting location...";
+// Maps for previews
+let cityMap, routeMap;
+let cityMarker, routeLayer;
+let selectedCityCoords = null;
+let selectedRouteTiles = null;
 
+function initPreviewMaps() {
+  if (!cityMap) {
+    cityMap = L.map("city-map", { zoomControl: false, attributionControl: false }).setView([20.59, 78.96], 4);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(cityMap);
+  }
+  if (!routeMap) {
+    routeMap = L.map("route-map", { zoomControl: false, attributionControl: false }).setView([20.59, 78.96], 4);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(routeMap);
+  }
+  setTimeout(() => { cityMap.invalidateSize(); routeMap.invalidateSize(); }, 200);
+}
+
+// Ensure maps load correctly when modal opens
+document.getElementById("open-manager-btn").addEventListener("click", initPreviewMaps);
+
+// Helper: Geocode using Nominatim
+async function geocode(query) {
+  const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+  const data = await res.json();
+  if (!data.length) throw new Error("Location not found");
+  return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), name: data[0].display_name };
+}
+
+// ── City Download Logic ──
+
+document.getElementById("city-search-btn").addEventListener("click", async () => {
+  const query = document.getElementById("city-search-input").value;
+  const btn = document.getElementById("city-search-btn");
+  if (!query) return;
+  
+  btn.disabled = true;
+  btn.textContent = "🔍...";
   try {
-    const { lat, lon } = await getUserLocation(3000);
+    const loc = await geocode(query);
+    selectedCityCoords = loc;
     
-    // 10km radius approximation in degrees
-    const latOffset = 10 / 111; 
-    const lonOffset = 10 / (111 * Math.cos(lat * Math.PI / 180));
+    cityMap.setView([loc.lat, loc.lon], 12);
+    if (cityMarker) cityMarker.remove();
+    cityMarker = L.marker([loc.lat, loc.lon]).addTo(cityMap);
+    
+    // Draw a 10km circle to show what will be downloaded
+    L.circle([loc.lat, loc.lon], { radius: 10000, color: '#4dff91', fillOpacity: 0.1 }).addTo(cityMap);
+    
+    document.getElementById("download-city-btn").disabled = false;
+  } catch (err) {
+    alert("City not found. Please try a different name.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Search";
+  }
+});
 
-    const minLat = lat - latOffset, maxLat = lat + latOffset;
-    const minLon = lon - lonOffset, maxLon = lon + lonOffset;
+// ── Route Download Logic ──
 
-    const urlsToFetch = [];
-    // Zooms 13 to 16 for high detail
-    for (let z = 13; z <= 16; z++) {
-      const xMin = lon2tile(minLon, z), xMax = lon2tile(maxLon, z);
-      const yMin = Math.min(lat2tile(maxLat, z), lat2tile(minLat, z)); // Note: lat tile numbers decrease as lat increases
-      const yMax = Math.max(lat2tile(maxLat, z), lat2tile(minLat, z));
+document.getElementById("route-search-btn").addEventListener("click", async () => {
+  const startQuery = document.getElementById("route-start-input").value;
+  const endQuery = document.getElementById("route-end-input").value;
+  const btn = document.getElementById("route-search-btn");
+  if (!startQuery || !endQuery) return;
 
-      for (let x = xMin; x <= xMax; x++) {
-        for (let y = yMin; y <= yMax; y++) {
-          urlsToFetch.push(`https://tile.openstreetmap.org/${z}/${x}/${y}.png`);
+  btn.disabled = true;
+  btn.textContent = "Calculating...";
+  try {
+    const startLoc = await geocode(startQuery);
+    const endLoc = await geocode(endQuery);
+
+    // Call OSRM for route driving directions
+    const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${startLoc.lon},${startLoc.lat};${endLoc.lon},${endLoc.lat}?overview=full&geometries=geojson`;
+    const res = await fetch(osrmUrl);
+    const data = await res.json();
+
+    if (data.code !== "Ok") throw new Error("Route not found");
+
+    const geojson = data.routes[0].geometry;
+    
+    if (routeLayer) routeLayer.remove();
+    routeLayer = L.geoJSON(geojson, { style: { color: '#4da6ff', weight: 4 } }).addTo(routeMap);
+    routeMap.fitBounds(routeLayer.getBounds(), { padding: [20, 20] });
+
+    // Calculate tile bounding boxes for the route
+    selectedRouteTiles = [];
+    const coordinates = geojson.coordinates; // [lon, lat] pairs
+    
+    // Simplistic corridor: for each coordinate, find tiles in a ~3km buffer
+    const bufferDeg = 3 / 111; 
+    const tileSet = new Set();
+
+    // Use zoom levels 13, 14, 15
+    for (let z = 13; z <= 15; z++) {
+      // To prevent massive loops, step through coordinates
+      for (let i = 0; i < coordinates.length; i += Math.max(1, Math.floor(coordinates.length / 50))) {
+        const lon = coordinates[i][0];
+        const lat = coordinates[i][1];
+        
+        const lonOffset = bufferDeg / Math.cos(lat * Math.PI / 180);
+        
+        const xMin = lon2tile(lon - lonOffset, z), xMax = lon2tile(lon + lonOffset, z);
+        const yMin = Math.min(lat2tile(lat + bufferDeg, z), lat2tile(lat - bufferDeg, z));
+        const yMax = Math.max(lat2tile(lat + bufferDeg, z), lat2tile(lat - bufferDeg, z));
+
+        for (let x = xMin; x <= xMax; x++) {
+          for (let y = yMin; y <= yMax; y++) {
+            tileSet.add(`${z}/${x}/${y}`);
+          }
         }
       }
     }
-
-    statusText.textContent = `Downloading ${urlsToFetch.length} tiles...`;
     
-    // We rely on the service worker to actually save these to the `sos-tiles-v1` cache during the fetch.
-    let downloaded = 0;
+    selectedRouteTiles = Array.from(tileSet).map(t => `https://tile.openstreetmap.org/${t}.png`);
+    document.getElementById("download-route-btn").disabled = false;
+    document.getElementById("download-route-btn").textContent = `📥 Download Route Map (${selectedRouteTiles.length} tiles)`;
 
-    // Download in batches to avoid overwhelming the browser/network
-    const BATCH_SIZE = 10;
+  } catch (err) {
+    alert("Could not calculate route. Ensure cities are connected by road.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Find Route";
+  }
+});
+
+// ── Shared Download Execution ──
+
+function lon2tile(lon, zoom) { return (Math.floor((lon + 180) / 360 * Math.pow(2, zoom))); }
+function lat2tile(lat, zoom) { return (Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom))); }
+
+async function executeDownload(urlsToFetch, buttonId) {
+  const btn = document.getElementById(buttonId);
+  const progressContainer = document.getElementById("modal-progress-container");
+  const progressBar = document.getElementById("modal-progress-bar");
+  const statusText = document.getElementById("modal-status-text");
+
+  btn.style.display = "none";
+  progressContainer.style.display = "flex";
+  progressBar.style.width = "0%";
+  statusText.textContent = `Downloading ${urlsToFetch.length} tiles...`;
+
+  try {
+    let downloaded = 0;
+    const BATCH_SIZE = 15;
     for (let i = 0; i < urlsToFetch.length; i += BATCH_SIZE) {
       const batch = urlsToFetch.slice(i, i + BATCH_SIZE);
       await Promise.all(batch.map(async (url) => {
         try {
-          // fetch will be intercepted by SW and cached automatically
-          const res = await fetch(url, { cache: "no-store" }); 
-        } catch (e) {
-          // Ignore individual tile failures
-        }
+          await fetch(url, { cache: "no-store" }); 
+        } catch (e) {} // Ignore individual tile failures
       }));
       downloaded += batch.length;
       progressBar.style.width = `${Math.min(100, (downloaded / urlsToFetch.length) * 100)}%`;
-      statusText.textContent = `${Math.min(downloaded, urlsToFetch.length)} / ${urlsToFetch.length}`;
+      statusText.textContent = `${Math.min(downloaded, urlsToFetch.length)} / ${urlsToFetch.length} tiles saved`;
     }
-
+    
     statusText.textContent = "✅ Map saved offline!";
-    setTimeout(() => { progressContainer.style.display = "none"; btn.style.display = "block"; btn.textContent = "✅ Map Saved (10km)"; }, 3000);
-
+    updateStorageSize();
+    setTimeout(() => { progressContainer.style.display = "none"; btn.style.display = "block"; btn.textContent = "✅ Saved Successfully"; }, 3000);
   } catch (err) {
     statusText.textContent = "❌ Error downloading map";
     setTimeout(() => { progressContainer.style.display = "none"; btn.style.display = "block"; }, 3000);
+  }
+}
+
+document.getElementById("download-city-btn").addEventListener("click", () => {
+  if (!selectedCityCoords) return;
+  const latOffset = 10 / 111; 
+  const lonOffset = 10 / (111 * Math.cos(selectedCityCoords.lat * Math.PI / 180));
+
+  const minLat = selectedCityCoords.lat - latOffset, maxLat = selectedCityCoords.lat + latOffset;
+  const minLon = selectedCityCoords.lon - lonOffset, maxLon = selectedCityCoords.lon + lonOffset;
+
+  const urlsToFetch = [];
+  for (let z = 13; z <= 16; z++) {
+    const xMin = lon2tile(minLon, z), xMax = lon2tile(maxLon, z);
+    const yMin = Math.min(lat2tile(maxLat, z), lat2tile(minLat, z));
+    const yMax = Math.max(lat2tile(maxLat, z), lat2tile(minLat, z));
+
+    for (let x = xMin; x <= xMax; x++) {
+      for (let y = yMin; y <= yMax; y++) {
+        urlsToFetch.push(`https://tile.openstreetmap.org/${z}/${x}/${y}.png`);
+      }
+    }
+  }
+  executeDownload(urlsToFetch, "download-city-btn");
+});
+
+document.getElementById("download-route-btn").addEventListener("click", () => {
+  if (!selectedRouteTiles) return;
+  executeDownload(selectedRouteTiles, "download-route-btn");
+});
+
+// ── Storage Management ──
+
+async function updateStorageSize() {
+  const sizeText = document.getElementById("storage-size-text");
+  try {
+    const cache = await caches.open("sos-tiles-v1");
+    const requests = await cache.keys();
+    // Rough estimation: assume ~15KB per tile
+    const estimatedMB = (requests.length * 15) / 1024;
+    sizeText.textContent = `${requests.length} tiles (~${estimatedMB.toFixed(1)} MB)`;
+    sizeText.style.color = estimatedMB > 100 ? "var(--accent-red)" : "var(--accent-blue)";
+  } catch (e) {
+    sizeText.textContent = "0 MB";
+  }
+}
+
+document.getElementById("clear-cache-btn").addEventListener("click", async () => {
+  if (confirm("Are you sure you want to delete all offline map data? You will need an internet connection to view maps again.")) {
+    try {
+      await caches.delete("sos-tiles-v1");
+      updateStorageSize();
+      alert("Offline maps cleared successfully.");
+      document.getElementById("download-city-btn").textContent = "📥 Download City Map";
+      document.getElementById("download-route-btn").textContent = "📥 Download Route Map";
+    } catch (e) {
+      alert("Error clearing cache.");
+    }
   }
 });

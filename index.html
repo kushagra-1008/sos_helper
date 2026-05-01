@@ -26,23 +26,22 @@
   </header>
 
   <main>
-    <button id="find-btn">
-      <span class="btn-icon">📍</span>
-      <span class="btn-text">Find Nearby Help</span>
-    </button>
+    <div class="main-buttons">
+      <button id="find-btn" class="primary-btn">
+        <span class="btn-icon">📍</span>
+        <span class="btn-text">Find Nearby Help</span>
+      </button>
+      <button id="open-manager-btn" class="secondary-btn">
+        <span class="btn-icon">🗺️</span>
+        <span class="btn-text">Offline Maps Manager</span>
+      </button>
+    </div>
     <p id="status"></p>
 
     <!-- Map -->
     <div id="map-container">
       <div id="map"></div>
       <div id="map-offline-notice">Map tiles load online &amp; cache for offline use</div>
-      <div id="download-map-ui" style="display:none">
-        <button id="download-map-btn">📥 Save Map Offline (10km)</button>
-        <div id="download-progress-container" style="display:none">
-          <div id="download-progress-bar"></div>
-          <span id="download-status-text">Calculating...</span>
-        </div>
-      </div>
     </div>
 
     <div id="results">
@@ -71,6 +70,64 @@
   <footer>
     <p>Data sourced from OpenStreetMap • Works offline once loaded</p>
   </footer>
+
+  <!-- Offline Maps Manager Modal -->
+  <div id="manager-modal" class="modal-overlay" style="display:none">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>🗺️ Offline Maps Manager</h2>
+        <button id="close-manager-btn" class="close-btn">&times;</button>
+      </div>
+      
+      <div class="modal-tabs">
+        <button class="tab-btn active" data-tab="tab-city">City</button>
+        <button class="tab-btn" data-tab="tab-route">Route</button>
+        <button class="tab-btn" data-tab="tab-storage">Storage</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- City Download Tab -->
+        <div id="tab-city" class="tab-content active">
+          <p class="tab-desc">Search for a city to download its map (10km radius).</p>
+          <div class="search-box">
+            <input type="text" id="city-search-input" placeholder="e.g. Jaipur, Rajasthan" />
+            <button id="city-search-btn">Search</button>
+          </div>
+          <div id="city-map" class="preview-map"></div>
+          <button id="download-city-btn" class="download-action-btn" disabled>📥 Download City Map</button>
+        </div>
+
+        <!-- Route Download Tab -->
+        <div id="tab-route" class="tab-content">
+          <p class="tab-desc">Download the map corridor along a highway route.</p>
+          <div class="route-inputs">
+            <input type="text" id="route-start-input" placeholder="Start (e.g. Jaipur)" />
+            <input type="text" id="route-end-input" placeholder="End (e.g. Ajmer)" />
+            <button id="route-search-btn">Find Route</button>
+          </div>
+          <div id="route-map" class="preview-map"></div>
+          <button id="download-route-btn" class="download-action-btn" disabled>📥 Download Route Map</button>
+        </div>
+
+        <!-- Storage Management Tab -->
+        <div id="tab-storage" class="tab-content">
+          <div class="storage-info">
+            <div class="storage-icon">💾</div>
+            <h3>Offline Map Storage</h3>
+            <p id="storage-size-text">Calculating...</p>
+            <p class="storage-desc">This is the estimated space taken up by your downloaded cities and routes.</p>
+          </div>
+          <button id="clear-cache-btn" class="danger-btn">🗑️ Clear Saved Maps</button>
+        </div>
+
+        <!-- Global Progress UI -->
+        <div id="modal-progress-container" style="display:none">
+          <div id="modal-progress-bar"></div>
+          <span id="modal-status-text">Downloading...</span>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Leaflet JS (cached by SW for offline) -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
