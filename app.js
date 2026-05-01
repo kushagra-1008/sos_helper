@@ -119,10 +119,21 @@ function findNearest(userLat, userLon, category, limit = 50) {
   const lonMin = userLon - BOX, lonMax = userLon + BOX;
 
   const candidates = [];
+  
+  // Helper to filter out garbage data from OSM
+  function isGarbage(name) {
+    const n = name.toLowerCase();
+    if (n === "unnamed emergency facility") return true;
+    if (n.includes("prepaid") || n.includes("gate") || n.includes("no entry") || n.includes("check post") || n.includes("booth")) return true;
+    return false;
+  }
+
   for (let i = 0; i < ALL_FACILITIES.length; i++) {
     const f = ALL_FACILITIES[i];
     if (f.category !== category) continue;
     if (f.lat == null || f.lon == null) continue;
+    if (isGarbage(f.name)) continue;
+    
     // Quick bounding-box reject
     if (f.lat < latMin || f.lat > latMax || f.lon < lonMin || f.lon > lonMax) continue;
     const distMetres = haversineMetres(userLat, userLon, f.lat, f.lon);
@@ -143,6 +154,7 @@ function findNearest(userLat, userLon, category, limit = 50) {
     for (let i = 0; i < ALL_FACILITIES.length; i++) {
       const f = ALL_FACILITIES[i];
       if (f.category !== category || f.lat == null || f.lon == null) continue;
+      if (isGarbage(f.name)) continue;
       const distMetres = haversineMetres(userLat, userLon, f.lat, f.lon);
       const bearing = getBearing(userLat, userLon, f.lat, f.lon);
       candidates.push({
