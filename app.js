@@ -704,18 +704,30 @@ async function executeDownload(urlsToFetch, buttonId) {
 
   try {
     let downloaded = 0;
-    const BATCH_SIZE = 15;
-    for (let i = 0; i < urlsToFetch.length; i += BATCH_SIZE) {
-      const batch = urlsToFetch.slice(i, i + BATCH_SIZE);
-      await Promise.all(batch.map(async (url) => {
+    const CONCURRENCY = 25; // Continuous parallel connections
+    let index = 0;
+
+    // Worker function: grabs the next tile in the queue as soon as it finishes the previous one
+    async function downloadWorker() {
+      while (index < urlsToFetch.length) {
+        const url = urlsToFetch[index++];
         try {
           await fetch(url, { cache: "no-store" }); 
         } catch (e) {} // Ignore individual tile failures
-      }));
-      downloaded += batch.length;
-      progressBar.style.width = `${Math.min(100, (downloaded / urlsToFetch.length) * 100)}%`;
-      statusText.textContent = `${Math.min(downloaded, urlsToFetch.length)} / ${urlsToFetch.length} tiles saved`;
+        
+        downloaded++;
+        // Update UI exactly as they finish
+        progressBar.style.width = `${Math.min(100, (downloaded / urlsToFetch.length) * 100)}%`;
+        statusText.textContent = `${Math.min(downloaded, urlsToFetch.length)} / ${urlsToFetch.length} tiles saved`;
+      }
     }
+
+    // Spin up the workers and wait for all to finish
+    const workers = [];
+    for (let i = 0; i < CONCURRENCY; i++) {
+      workers.push(downloadWorker());
+    }
+    await Promise.all(workers);
     
     statusText.textContent = "✅ Map saved offline!";
     updateStorageSize();
